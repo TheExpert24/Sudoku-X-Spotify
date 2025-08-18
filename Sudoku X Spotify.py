@@ -404,8 +404,8 @@ class SudokuGame:
     def connect_spotify(self):
         try:
             # Spotify credentials (replace with your own)
-            client_id = "c50c18c34e2c4d4ba972320ee0e60f9e"
-            client_secret = "d2ba1ebb5e104f3f835b9c4ef6402d72"
+            client_id = ""
+            client_secret = ""
             redirect_uri = "http://127.0.0.1:8080"
             
             if client_secret == "your_client_secret_here":
