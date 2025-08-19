@@ -31,6 +31,12 @@ class SudokuGame:
         self.start_time = time.time()
         self.timer_running = True
         
+        self.game_mode = "Single Player"
+        self.is_multiplayer = False
+        self.current_player = 1
+        self.player1_mistakes = 0
+        self.player2_mistakes = 0
+        
         self.spotify_connected = False
         self.current_song = "No song playing"
         self.spotify_client = None
@@ -150,8 +156,24 @@ class SudokuGame:
                 entry.bind('<Button-1>', lambda e, r=i, c=j: self.on_click(r, c))
                 self.entries[i][j] = entry
         
-        self.diff_frame = tk.Frame(self.root, bg=self.bg_color)
-        self.diff_frame.pack(pady=10)
+        controls_frame = tk.Frame(self.root, bg=self.bg_color)
+        controls_frame.pack(pady=10)
+        
+        mode_frame = tk.Frame(controls_frame, bg=self.bg_color)
+        mode_frame.pack(side=tk.LEFT, padx=10)
+        
+        tk.Label(mode_frame, text="Mode:", font=('Arial', 14, 'bold'), 
+                bg=self.bg_color, fg=self.text_color).pack(side=tk.LEFT, padx=5)
+        
+        self.mode_var = tk.StringVar(value=self.game_mode)
+        self.mode_menu = tk.OptionMenu(mode_frame, self.mode_var, 
+                                      "Single Player", "Multiplayer",
+                                      command=self.change_mode)
+        self.mode_menu.config(font=('Arial', 12))
+        self.mode_menu.pack(side=tk.LEFT, padx=5)
+        
+        self.diff_frame = tk.Frame(controls_frame, bg=self.bg_color)
+        self.diff_frame.pack(side=tk.LEFT, padx=10)
         
         self.diff_label = tk.Label(self.diff_frame, text="Difficulty:", font=('Arial', 14, 'bold'), 
                                   bg=self.bg_color, fg=self.text_color)
@@ -170,7 +192,11 @@ class SudokuGame:
         
         self.mistake_label = tk.Label(self.root, text=f"Mistakes: {self.mistakes}/{self.max_mistakes}", 
                                     font=('Arial', 16, 'bold'), fg=self.mistake_color, bg=self.bg_color)
-        self.mistake_label.pack(pady=15)
+        self.mistake_label.pack(pady=5)
+        
+        self.player_label = tk.Label(self.root, text="", 
+                                    font=('Arial', 14, 'bold'), fg=self.text_color, bg=self.bg_color)
+        self.player_label.pack(pady=5)
         
         spotify_frame = tk.Frame(self.root, bg=self.bg_color)
         spotify_frame.pack(pady=5)
@@ -213,7 +239,12 @@ class SudokuGame:
             self.root.after_idle(lambda: self.check_number(row, col))
     
     def check_number(self, row, col):
-        if self.mistakes >= self.max_mistakes:
+        if self.is_multiplayer:
+            current_mistakes = self.player1_mistakes if self.current_player == 1 else self.player2_mistakes
+        else:
+            current_mistakes = self.mistakes
+            
+        if current_mistakes >= self.max_mistakes:
             return
             
         entry = self.entries[row][col]
@@ -229,23 +260,43 @@ class SudokuGame:
             for j in range(9):
                 if self.grid[i][j] != 0:
                     temp_grid[i][j] = self.grid[i][j]
-                elif self.entries[i][j]['bg'] == '#0066FF':
+                elif self.entries[i][j]['bg'] in ['#0066FF', '#00AA00']:
                     cell_value = self.entries[i][j].get()
                     if cell_value:
                         temp_grid[i][j] = int(cell_value)
         
         if self.is_valid(temp_grid, row, col, num):
-            entry.config(bg='#0066FF', fg='white', state='readonly', font=('Arial', 20, 'bold'))
+            if self.is_multiplayer:
+                color = '#0066FF' if self.current_player == 1 else '#00AA00'
+                entry.config(bg=color, fg='white', state='readonly', font=('Arial', 20, 'bold'))
+                self.switch_player()
+            else:
+                entry.config(bg='#0066FF', fg='white', state='readonly', font=('Arial', 20, 'bold'))
             self.root.after_idle(self.check_solution)
         else:
             entry.config(bg='#FF3333', fg='white', state='normal', font=('Arial', 20, 'bold'))
-            self.mistakes += 1
-            self.mistake_label.config(text=f"Mistakes: {self.mistakes}/{self.max_mistakes}")
-            
-            if self.mistakes >= self.max_mistakes:
-                self.timer_running = False
-                messagebox.showinfo("Game Over", "Sorry you failed! Loading new game...")
-                self.new_game()
+            if self.is_multiplayer:
+                if self.current_player == 1:
+                    self.player1_mistakes += 1
+                else:
+                    self.player2_mistakes += 1
+                self.update_multiplayer_display()
+                
+                if (self.current_player == 1 and self.player1_mistakes >= self.max_mistakes) or \
+                   (self.current_player == 2 and self.player2_mistakes >= self.max_mistakes):
+                    winner = "Player 2" if self.current_player == 1 else "Player 1"
+                    messagebox.showinfo("Game Over", f"{winner} wins! Loading new game...")
+                    self.new_game()
+                else:
+                    self.switch_player()
+            else:
+                self.mistakes += 1
+                self.mistake_label.config(text=f"Mistakes: {self.mistakes}/{self.max_mistakes}")
+                
+                if self.mistakes >= self.max_mistakes:
+                    self.timer_running = False
+                    messagebox.showinfo("Game Over", "Sorry you failed! Loading new game...")
+                    self.new_game()
     
     def on_click(self, row, col):
         entry = self.entries[row][col]
@@ -343,14 +394,43 @@ class SudokuGame:
     
     def new_game(self):
         self.mistakes = 0
-        self.mistake_label.config(text=f"Mistakes: {self.mistakes}/{self.max_mistakes}")
+        self.player1_mistakes = 0
+        self.player2_mistakes = 0
+        self.current_player = 1
         self.start_time = time.time()
         self.timer_running = True
+        
+        if self.is_multiplayer:
+            self.update_multiplayer_display()
+        else:
+            self.mistake_label.config(text=f"Mistakes: {self.mistakes}/{self.max_mistakes}")
+            self.player_label.config(text="")
+        
         self.generate_puzzle()
     
     def change_difficulty(self, selected_difficulty):
         self.difficulty = selected_difficulty
         self.new_game()
+    
+    def change_mode(self, selected_mode):
+        self.game_mode = selected_mode
+        self.is_multiplayer = (selected_mode == "Multiplayer")
+        self.new_game()
+    
+    def switch_player(self):
+        if not self.is_multiplayer:
+            return
+        self.current_player = 2 if self.current_player == 1 else 1
+        self.update_multiplayer_display()
+    
+    def update_multiplayer_display(self):
+        if not self.is_multiplayer:
+            return
+        
+        self.mistake_label.config(text=f"P1: {self.player1_mistakes}/{self.max_mistakes} | P2: {self.player2_mistakes}/{self.max_mistakes}")
+        
+        player_color = '#0066FF' if self.current_player == 1 else '#00AA00'
+        self.player_label.config(text=f"Player {self.current_player}'s Turn", fg=player_color)
     
     def update_timer(self):
         if self.timer_running:
@@ -404,8 +484,8 @@ class SudokuGame:
     def connect_spotify(self):
         try:
             # Spotify credentials (replace with your own)
-            client_id = ""
-            client_secret = ""
+            client_id = "c50c18c34e2c4d4ba972320ee0e60f9e"
+            client_secret = "d2ba1ebb5e104f3f835b9c4ef6402d72"
             redirect_uri = "http://127.0.0.1:8080"
             
             if client_secret == "your_client_secret_here":
