@@ -24,6 +24,7 @@ class SudokuGame:
         self.root.configure(bg=self.bg_color)
         
         self.grid = [[0 for _ in range(9)] for _ in range(9)]
+        self.solution = [[0 for _ in range(9)] for _ in range(9)]
         self.entries = [[None for _ in range(9)] for _ in range(9)]
         self.mistakes = 0
         self.max_mistakes = 3
@@ -255,17 +256,9 @@ class SudokuGame:
         
         num = int(value)
         
-        temp_grid = [[0 for _ in range(9)] for _ in range(9)]
-        for i in range(9):
-            for j in range(9):
-                if self.grid[i][j] != 0:
-                    temp_grid[i][j] = self.grid[i][j]
-                elif self.entries[i][j]['bg'] in ['#0066FF', '#00AA00']:
-                    cell_value = self.entries[i][j].get()
-                    if cell_value:
-                        temp_grid[i][j] = int(cell_value)
-        
-        if self.is_valid(temp_grid, row, col, num):
+        # Check if the number is correct according to the solution
+        if num == self.solution[row][col]:
+            # Correct answer
             if self.is_multiplayer:
                 color = '#0066FF' if self.current_player == 1 else '#00AA00'
                 entry.config(bg=color, fg='white', state='readonly', font=('Arial', 20, 'bold'))
@@ -274,6 +267,7 @@ class SudokuGame:
                 entry.config(bg='#0066FF', fg='white', state='readonly', font=('Arial', 20, 'bold'))
             self.root.after_idle(self.check_solution)
         else:
+            # Wrong answer - this is a mistake
             entry.config(bg='#FF3333', fg='white', state='normal', font=('Arial', 20, 'bold'))
             if self.is_multiplayer:
                 if self.current_player == 1:
@@ -329,6 +323,9 @@ class SudokuGame:
         
         self.grid = [[0 for _ in range(9)] for _ in range(9)]
         self.fill_grid()
+        
+        # Store the complete solution
+        self.solution = [row[:] for row in self.grid]
         
         cells_to_remove = self.difficulty_settings[self.difficulty]
         self.remove_cells(cells_to_remove)
